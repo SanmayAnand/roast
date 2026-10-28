@@ -1,0 +1,33 @@
+diff --git a/6.c/MISC/bug-coverage-stress.t b/6.c/MISC/bug-coverage-stress.t
+index 084511347..369d96987 100644
+--- a/6.c/MISC/bug-coverage-stress.t
++++ b/6.c/MISC/bug-coverage-stress.t
+@@ -123,16 +123,19 @@ is_run ｢
+     # the bug more prevalent
+     IO::Socket::Async.listen: '127.0.0.1', 15556 + $_ for ^10;
+ 
+-    start react whenever IO::Socket::Async.listen: '127.0.0.1', 15555 {
+-        supply {
+-            whenever $_ {
+-                print 'pass';
+-                exit;
+-            }
+-        }.Seq
++    my $port = Promise.new;
++    start react {
++        my $listener = do whenever IO::Socket::Async.listen: '127.0.0.1', 0 {
++            supply {
++                whenever $_ {
++                    print 'pass';
++                    exit;
++                }
++            }.Seq
++        }
++        $port.keep: await $listener.socket-port;
+     }
+-    sleep .2;
+-    .print: "x\n" with IO::Socket::INET.new: :host<127.0.0.1>, :15555port;
++    .print: "x\n" with IO::Socket::INET.new: :host<127.0.0.1>, :port(await $port);
+     sleep 2;
+ ｣, {:out<pass>, :err(''), :0status}, 'supply inside sock does not hang';
+ 

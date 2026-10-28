@@ -1,0 +1,60 @@
+name: roast-922 bug-coverage-stress check
+
+on:
+  push:
+    branches: [ci-922-ubuntu]
+  workflow_dispatch:
+
+jobs:
+  stress:
+    name: ${{ matrix.branch }} / rakudo ${{ matrix.rakudo }} / RAKUAST=${{ matrix.rakuast }} / ${{ matrix.mode }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { branch: master, sha: da425eb928d77d2f486d52ff22f897ba0fcf88fb, file: 6.c/MISC/bug-coverage-stress.t, enum: packages/RAKUDO1413/lib/RAKUDO1413.rakumod, rakudo: '2026.09', rakuast: default, mode: full }
+          - { branch: 6.d-errata, sha: 1873f952ee61b594947b4ce8b8a4ef8b3c2380b7, file: MISC/bug-coverage-stress.t, enum: packages/RAKUDO1413.pm6, rakudo: '2026.09', rakuast: default, mode: full }
+          - { branch: master, sha: da425eb928d77d2f486d52ff22f897ba0fcf88fb, file: 6.c/MISC/bug-coverage-stress.t, enum: packages/RAKUDO1413/lib/RAKUDO1413.rakumod, rakudo: '2026.09', rakuast: '0', mode: enum }
+          - { branch: master, sha: da425eb928d77d2f486d52ff22f897ba0fcf88fb, file: 6.c/MISC/bug-coverage-stress.t, enum: packages/RAKUDO1413/lib/RAKUDO1413.rakumod, rakudo: '2026.07', rakuast: default, mode: enum }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ci
+      - uses: actions/checkout@v4
+        with:
+          repository: Raku/roast
+          ref: ${{ matrix.sha }}
+          path: roast
+      - uses: Raku/setup-raku@v1
+        with:
+          raku-version: ${{ matrix.rakudo }}
+      - name: Run
+        env:
+          OUT: ${{ github.workspace }}/results
+        run: |
+          [ "${{ matrix.rakuast }}" = default ] || export RAKUDO_RAKUAST=${{ matrix.rakuast }}
+          bash ci/ci-922/run.sh roast "${{ matrix.file }}" "${{ matrix.enum }}" \
+            "$GITHUB_WORKSPACE/ci/ci-922/socket-${{ matrix.branch }}.patch" ${{ matrix.mode }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-${{ matrix.branch }}-${{ matrix.rakudo }}-rakuast-${{ matrix.rakuast }}-${{ matrix.mode }}
+          path: results
+
+  six-c-errata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Raku/roast
+          ref: 6.c-errata
+          path: roast
+      - name: Look for the file and its tests on 6.c-errata
+        working-directory: roast
+        run: |
+          echo "6.c-errata at $(git rev-parse --short HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
+          hits=$(git grep -lE 'bug-coverage|RAKUDO1413|giant enums|15555|RT #132042' || true)
+          files=$(git ls-files | grep -i -E 'bug-coverage|RAKUDO1413' || true)
+          echo "matching content: ${hits:-none}; matching files: ${files:-none}" | tee -a "$GITHUB_STEP_SUMMARY"
